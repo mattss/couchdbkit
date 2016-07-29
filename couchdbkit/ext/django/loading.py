@@ -28,7 +28,7 @@ from couchdbkit import push
 from couchdbkit.resource import CouchdbResource
 from couchdbkit.exceptions import ResourceNotFound
 from django.conf import settings
-from django.utils.datastructures import SortedDict
+from collections import OrderedDict
 
 COUCHDB_DATABASES = getattr(settings, "COUCHDB_DATABASES", [])
 COUCHDB_TIMEOUT = getattr(settings, "COUCHDB_TIMEOUT", 300)
@@ -39,7 +39,7 @@ class CouchdbkitHandler(object):
     # share state between instances
     __shared_state__ = dict(
             _databases = {},
-            app_schema = SortedDict()
+            app_schema = OrderedDict()
     )
 
     def __init__(self, databases):
@@ -81,14 +81,14 @@ class CouchdbkitHandler(object):
             app_label = app_name.split('.')[-1]
             self._databases[app_label] = (server, dbname)
 
-    def sync(self, app, verbosity=2, temp=None):
+    def sync(self, app_config, verbosity=2, temp=None):
         """ used to sync views of all applications and eventually create
         database.
 
         When temp is specified, it is appended to the app's name on the docid.
         It can then be updated in the background and copied over the existing
         design docs to reduce blocking time of view updates """
-        app_name = app.__name__.rsplit('.', 1)[0]
+        app_name = app_config.name
         app_labels = set()
         schema_list = self.app_schema.values()
         for schema_dict in schema_list:
@@ -103,7 +103,7 @@ class CouchdbkitHandler(object):
                 print "sync `%s` in CouchDB" % app_name
             db = self.get_db(app_label)
 
-            app_path = os.path.abspath(os.path.join(sys.modules[app.__name__].__file__, ".."))
+            app_path = os.path.abspath(os.path.join(sys.modules[app_name].__file__, ".."))
             design_path = "%s/%s" % (app_path, "_design")
             if not os.path.isdir(design_path):
                 if settings.DEBUG:
@@ -183,7 +183,7 @@ class CouchdbkitHandler(object):
         """ register a Document object"""
         for s in schema:
             schema_name = schema[0].__name__.lower()
-            schema_dict = self.app_schema.setdefault(app_label, SortedDict())
+            schema_dict = self.app_schema.setdefault(app_label, OrderedDict())
             if schema_name in schema_dict:
                 fname1 = os.path.abspath(sys.modules[s.__module__].__file__)
                 fname2 = os.path.abspath(sys.modules[schema_dict[schema_name].__module__].__file__)
@@ -193,7 +193,7 @@ class CouchdbkitHandler(object):
 
     def get_schema(self, app_label, schema_name):
         """ retriev Document object from its name and app name """
-        return self.app_schema.get(app_label, SortedDict()).get(schema_name.lower())
+        return self.app_schema.get(app_label, OrderedDict()).get(schema_name.lower())
 
 couchdbkit_handler = CouchdbkitHandler(COUCHDB_DATABASES)
 register_schema = couchdbkit_handler.register_schema
